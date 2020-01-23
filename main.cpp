@@ -14,9 +14,8 @@
 static char rippleAlphabet[] =
     "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz";
 
-
-// compute the digest of the digest of the message, and put the first four bytes in out
-// Why the "digest of the digest"?
+// compute the digest of the digest of the message, and put the first four bytes
+// in out Why the "digest of the digest"?
 void
 checksum(void* out, void const* msg, std::size_t size)
 {
@@ -90,10 +89,7 @@ encodeBase58(
 
 namespace NewImpl {
 std::string
-encodeBase58(
-    void const* message,
-    std::size_t size,
-    char const* const alphabet)
+encodeBase58(void const* message, std::size_t size, char const* const alphabet)
 {
     using namespace boost::multiprecision;
 
@@ -175,19 +171,23 @@ main()
 
     auto const bufsize = toDecodeNBytes * 3;
     boost::container::small_vector<std::uint8_t, 1024> tempBuf(bufsize);
-    auto const referenceEncoded = ReferenceImpl::encodeBase58(
-        toDecodeBigEndian.data(),
-        toDecodeNBytes,
-        tempBuf.data(),
-        tempBuf.size(),
-        rippleAlphabet);
-    fmt::print("Ref: {}\n", referenceEncoded);
 
-    auto const newEncoded = NewImpl::encodeBase58(
-        toDecodeBigEndian.data(),
-        toDecodeNBytes,
-        rippleAlphabet);
-    fmt::print("New: {}\n", newEncoded);
+    {
+        std::array<std::uint8_t, 160 / 8> from{toDecodeBigEndian};
+        auto const referenceEncoded = ReferenceImpl::encodeBase58(
+            from.data(),
+            toDecodeNBytes,
+            tempBuf.data(),
+            tempBuf.size(),
+            rippleAlphabet);
+        fmt::print("Ref: {}\n", referenceEncoded);
+    }
+    {
+        std::array<std::uint8_t, 160 / 8> from{toDecodeBigEndian};
+        auto const newEncoded = NewImpl::encodeBase58(
+            from.data(), toDecodeNBytes, rippleAlphabet);
+        fmt::print("New: {}\n", newEncoded);
+    }
 
     // Get timing numbers
     int const iters = 1000000;
@@ -223,17 +223,15 @@ main()
         for (int i = 0; i < iters; ++i)
         {
             auto const newEncoded = NewImpl::encodeBase58(
-                toDecodeBigEndian.data(),
-                toDecodeNBytes,
-                rippleAlphabet);
+                toDecodeBigEndian.data(), toDecodeNBytes, rippleAlphabet);
             // Don't let the optimizer remove the call
-            if (referenceEncoded[0] == '%')
+            if (newEncoded[0] == '%')
                 return 1;
         }
         auto const stop = clock::now();
         auto const duration =
-                std::chrono::duration_cast<std::chrono::duration<double>>(
-                    stop - start);
+            std::chrono::duration_cast<std::chrono::duration<double>>(
+                stop - start);
         fmt::print("New: {}\n", duration.count());
     }
 
