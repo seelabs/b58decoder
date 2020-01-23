@@ -5,11 +5,27 @@
 #include <boost/container/static_vector.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
 
+// for sha256
+#include <sodium.h>
+
 #include <chrono>
 #include <string>
 
 static char rippleAlphabet[] =
     "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz";
+
+
+// compute the digest of the digest of the message, and put the first four bytes in out
+// Why the "digest of the digest"?
+void
+checksum(void* out, void const* msg, std::size_t size)
+{
+    unsigned char tmp1[crypto_hash_sha256_BYTES];
+    crypto_hash_sha256(tmp1, reinterpret_cast<unsigned char const*>(msg), size);
+    unsigned char tmp2[crypto_hash_sha256_BYTES];
+    crypto_hash_sha256(tmp2, tmp1, crypto_hash_sha256_BYTES);
+    std::memcpy(out, tmp2, 4);
+}
 
 namespace ReferenceImpl {
 std::string
@@ -20,6 +36,13 @@ encodeBase58(
     std::size_t temp_size,
     char const* const alphabet)
 {
+    std::array<unsigned char, 4> cs;
+    checksum(cs.data(), message, size);
+
+    // Hack hack hack
+    // Overwrite the first four bytes with the checksum
+    std::memcpy(const_cast<void*>(message), cs.data(), 4);
+
     auto pbegin = reinterpret_cast<unsigned char const*>(message);
     auto const pend = pbegin + size;
 
@@ -79,6 +102,13 @@ encodeBase58(
         assert(0);
         throw std::runtime_error("Can only encode up to 256 bits");
     }
+
+    std::array<unsigned char, 4> cs;
+    checksum(cs.data(), message, size);
+
+    // Hack hack hack
+    // Overwrite the first four bytes with the checksum
+    std::memcpy(const_cast<void*>(message), cs.data(), 4);
 
     checked_uint256_t toDecodeMP;
     {
@@ -177,7 +207,7 @@ main()
                 tempBuf.size(),
                 rippleAlphabet);
             // Don't let the optimizer remove the call
-            if (referenceEncoded[0] != 'h')
+            if (referenceEncoded[0] == '%')
                 return 1;
         }
         auto const stop = clock::now();
@@ -197,7 +227,7 @@ main()
                 toDecodeNBytes,
                 rippleAlphabet);
             // Don't let the optimizer remove the call
-            if (referenceEncoded[0] != 'h')
+            if (referenceEncoded[0] == '%')
                 return 1;
         }
         auto const stop = clock::now();
