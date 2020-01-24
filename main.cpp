@@ -112,6 +112,7 @@ encodeBase58(void const* message, std::size_t size, char const* const alphabet)
         import_bits(toDecodeMP, asU8, asU8 + size, 8, true);
     }
 
+    // 58^10
     std::uint64_t const b5810 = 430804206899405824;
     // log(2^256,58^10) ~= 4.3. So 5 coeff should be enough
     boost::container::static_vector<std::uint64_t, 5> coeff;
@@ -126,6 +127,15 @@ encodeBase58(void const* message, std::size_t size, char const* const alphabet)
 
     // now encode from base58^10 to base58
     // note: we could use avx instructions to do this in parallel
+    //       however:
+    //       1) avx does not have integer division instructions,
+    //       so we'd have to use tricks that convert division to
+    //       multiplication.
+    //       2) We're currently at at a 2.5x speedup. If the last part of this calculation
+    //          took zero time, it gets us to a 2.8x speedup. So the extra complication
+    //          isn't worth is.
+    //       Note: See www.agner.org/optimize/#vectorclass for a avx class that can do integer
+    //             division using multiplication only.
 
     std::string result;
     // log(2^256,58) ~= 43.7
